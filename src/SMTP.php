@@ -546,6 +546,42 @@ class SMTP
         } elseif (empty($authtype)) {
             $authtype = 'LOGIN';
         }
+
+        /*$rlt = $this->loginType($authtype,$username,$password,$OAuth);
+        if($rlt){
+            return true;
+        }*/
+
+        foreach (['CRAM-MD5','LOGIN', 'PLAIN','NTLM', 'XOAUTH2'] as $method) {
+            if (in_array($method, $this->server_caps['AUTH'])) {
+                $authtype = $method;
+                if (empty($authtype)) {
+                    $this->setError('No supported authentication methods found');
+
+                    return false;
+                }
+                self::edebug('Auth method selected: ' . $authtype, self::DEBUG_LOWLEVEL);
+                $rlt = $this->loginType($authtype,$username,$password,$OAuth);
+                if($rlt){
+                    return  true;
+                }
+            }
+        }
+        self::edebug('所有登录方式都已测试，登录失败');
+        return false;
+
+
+    }
+
+    /**
+     * 根据登录类型进行登录验证。
+     * @param $authtype
+     * @param $username
+     * @param $password
+     * @param $OAuth
+     * @return bool
+     */
+    private function loginType($authtype,$username,$password,$OAuth){
         switch ($authtype) {
             case 'PLAIN':
                 //Start authentication
@@ -601,6 +637,38 @@ class SMTP
                 if (!$this->sendCommand('AUTH', 'AUTH XOAUTH2 ' . $oauth, 235)) {
                     return false;
                 }
+                break;
+            case "NTLM":
+                // WORKSTATION 指的本地计算机名，会话过程中这个值可为空
+                $WORKSTATION="RealEye.MATS";
+                //处理 type1 和 type3 需要的 Domain , User Name, Target Name(就是 DOMAIN)
+                if (strpos($username, '\\')!==false) {
+                    list($DOMAIN,$UserName)=explode('\\', $username);
+                }else{
+                    $DOMAIN='';
+                    $UserName=$username;
+                }
+                $TargetName=$DOMAIN;
+
+                //msg1
+                $msg1 = AuthNtlm::typeMsg1($DOMAIN,$WORKSTATION);
+
+                $auth_ntlm_cmd_str="AUTH NTLM ".base64_encode($msg1);
+                if (!$this->sendCommand('AUTH',$auth_ntlm_cmd_str,334)
+                ) {
+                    return false;
+                }
+
+                //Though 0 based, there is a white space after the 3 digit number
+                //msg2
+                $challenge = AuthNtlm::parseTypeMsg2($this->last_reply);
+
+                //msg3
+                $msg3 = AuthNtlm::typeMsg3($challenge,$UserName,$password,$TargetName,$WORKSTATION);
+
+                // send encoded ciphertext
+                return $this->sendCommand('Cipher Text', base64_encode($msg3), 235);
+
                 break;
             default:
                 $this->setError("Authentication method \"$authtype\" is not supported");
