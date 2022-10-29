@@ -332,16 +332,8 @@ class PHPMailer
      * Options array passed to stream_context_create when connecting via SMTP.
      *
      * @var array
-     * 这个是 stream_context_create($options) $options 的默认值。
-     * 新增加了忽略验证对方证书有效性的选项，这样能解决 ssl/tls 连接出错的问题：
-     *           OpenSSL Error messages:error:14090086:SSL routines:ssl3_get_server_certificate:certificate verify failed
      */
-    public $SMTPOptions = [
-        'ssl' => [
-            'verify_peer' => false,
-            'verify_peer_name' => false
-        ]
-    ];
+    public $SMTPOptions = [];
 
     /**
      * SMTP username.
